@@ -3,9 +3,6 @@
 
 Running an external process in with Kotlin/JVM has never been so easy 🤤
 
-Currently working on this README file, all functionalities are done.  
-You can 
-
 ## Prerequisites
 
 - Java 11+
@@ -15,8 +12,8 @@ This library only supports Kotlin/JVM
 
 ## Features
 
-- the idiomatic way to launch and sync on an external process
-- or run a process asynchronously and idiomatically
+- the idiomatic way to run an external process synchronously or asynchronously
+- very lightweight, only 3 source files in this library
 
 ## How to import
 
@@ -91,3 +88,5 @@ val runningProcess: CompletableFuture<Process> =
     onStdErr { logger.warn {it} } 
   }
 ```
+
+For all others usages, refer to the only 3 [source files](lib/src/main/kotlin/mikufan/cx/executil/).
