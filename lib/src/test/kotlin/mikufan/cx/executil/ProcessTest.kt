@@ -28,8 +28,8 @@ class ProcessTest : ShouldSpec({
 
     should("sync by manual functions") {
       runCmd("python", "--version").sync {
-        onStdOut { log.info { it } }
-        onStdErr { log.warn { it } }
+        onStdOutForEachLine { log.info { it } }
+        onStdErrForEachLine { log.warn { it } }
       }
     }
   }
@@ -45,8 +45,8 @@ class ProcessTest : ShouldSpec({
     should("interact without easy syntax") {
       runCmd("cmd").sync {
         onStdIn { this writeLine "python --version" writeLine "java --version" writeLine "gradle --version" writeLine "exit" }
-        onStdOut { log.info { it } }
-        onStdErr { log.warn { it } }
+        onStdOutForEachLine { log.info { it } }
+        onStdErrForEachLine { log.warn { it } }
       }
     }
     should("successfully init a gradle project") {
