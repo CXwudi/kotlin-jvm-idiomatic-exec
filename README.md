@@ -25,8 +25,8 @@ To run `java --version` as an external process:
 
 ```kotlin
 runCmd("java", "--version").sync {
-  onStdOut { logger.info {it} }
-  onStdErr { logger.warn {it} }
+  onStdOutForEachLine { logger.info {it} }
+  onStdErrForEachLine { logger.warn {it} }
 }
 ```
 
@@ -45,7 +45,7 @@ runCmd("ls") {
   directory = Path(".")
   redirectErrorStream = true
 }.sync(timeout = 5, unit = TimeUnit.MINUTES, executor = Executors.newFixedThreadPool(3)) {
-  onStdOut(Charsets.UTF_8) { logger.info {it} }
+  onStdOut(Charsets.UTF_8) { this.forEachLine { logger.info {it} } }
   // no need to handle std err as we have set redirectErrorStream = true
 }
 ```
@@ -73,8 +73,8 @@ runCmd("cmd").sync {
 // which is equivalent to 
 runCmd("cmd").sync {
   onStdIn { this writeLine "python --version" writeLine "java --version" writeLine "gradle --version" writeLine "exit" }
-  onStdOut { log.info { it } }
-  onStdErr { log.warn { it } }
+  onStdOutForEachLine { logger.info {it} }
+  onStdErrForEachLine { logger.warn {it} }
 }
 ```
 
@@ -84,8 +84,8 @@ Simply change `sync()` to `async()` to turn any synchronized waiting to asynchro
 ```kotlin
 val runningProcess: CompletableFuture<Process> = 
   runCmd("java", "--version").async { // sync -> async
-    onStdOut { logger.info {it} }
-    onStdErr { logger.warn {it} } 
+    onStdOutForEachLine { logger.info {it} }
+    onStdErrForEachLine { logger.warn {it} }
   }
 ```
 
