@@ -61,7 +61,7 @@ class ProcessSyncer(
    * @param charset Charset the char set that the std-out is intended to be read, default is [Charsets.UTF_8]
    * @param lineHandler Function1<String, Unit> code about how to handle each line in std-out
    */
-  inline fun onStdOutForEachLine(charset: Charset = Charsets.UTF_8, noinline lineHandler: (String) -> Unit) {
+  inline fun onStdOutEachLine(charset: Charset = Charsets.UTF_8, noinline lineHandler: (String) -> Unit) {
     onStdOut(charset) { forEachLine(lineHandler) }
   }
 
@@ -70,7 +70,7 @@ class ProcessSyncer(
    * @param charset Charset the char set that the std-err is intended to be read, default is [Charsets.UTF_8]
    * @param lineHandler Function1<String, Unit> code about how to handle each line in std-err
    */
-  inline fun onStdErrForEachLine(charset: Charset = Charsets.UTF_8, noinline lineHandler: (String) -> Unit) {
+  inline fun onStdErrEachLine(charset: Charset = Charsets.UTF_8, noinline lineHandler: (String) -> Unit) {
     onStdOut(charset) { forEachLine(lineHandler) }
   }
 
@@ -95,11 +95,11 @@ class ProcessSyncer(
    */
   inline fun withLogger(logger: Logger, stdOutLevel: Level = Level.INFO, stdErrLevel: Level = Level.DEBUG) {
     val logStdOut = chooseLogMethod(stdOutLevel)
-    onStdOutForEachLine {
+    onStdOutEachLine {
       logStdOut(it, logger)
     }
     val logStdErr = chooseLogMethod(stdErrLevel)
-    onStdOutForEachLine {
+    onStdOutEachLine {
       logStdErr(it, logger)
     }
   }
