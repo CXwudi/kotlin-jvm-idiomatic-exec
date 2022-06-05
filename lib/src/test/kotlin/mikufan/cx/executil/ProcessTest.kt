@@ -14,10 +14,23 @@ class ProcessTest : ShouldSpec({
 
   context("run youtube-dl commands") {
     xshould("sync to logger") {
-      val cmd = "python .\\youtube_dl\\__main__.py -v https://www.youtube.com/watch?v=PHW87EW6KRk --ffmpeg-location ..\\..\\ffmpeg.exe"
-      runCmd(*cmd.split(' ').toTypedArray()) {
-        directory = Path.of("D:\\11134\\Videos\\Vocaloid Coding POC\\Video Downloader POC\\official-youtube-dl")
-      }.sync { withLogger(log.underlyingLogger) }
+      // yt-dlp seems to detect which stream is opened and uses it.
+      // https://www.nicovideo.jp/watch/sm40348768
+      // https://www.youtube.com/watch?v=IpKDXFGoLnE
+      runCmd(
+        "D:\\coding-workspace\\Vocaloid Coding POC\\Project VD Run Env\\yt-dlp.exe",
+        "-v",
+        "https://www.nicovideo.jp/watch/sm40348768",
+        "--ffmpeg-location",
+        "./ffmpeg.exe",
+        "--write-thumbnail"
+      ) {
+        directory = Path.of("D:\\coding-workspace\\Vocaloid Coding POC\\Project VD Run Env\\")
+//        redirectErrorStream()
+      }.sync {
+        onStdOutEachLine { log.info { it } }
+//        onStdErrEachLine { log.warn { it } }
+      }
     }
   }
 
@@ -26,24 +39,24 @@ class ProcessTest : ShouldSpec({
       runCmd("java", "--version").sync { withLogger(log.underlyingLogger) }
     }
 
-    should("sync by manual functions") {
+    xshould("sync by manual functions") {
       runCmd("python", "--version").sync {
         onStdOutEachLine { log.info { it } }
         onStdErrEachLine { log.warn { it } }
       }
     }
   }
-  
+
   context("run a interactive shell") {
     should("interact") {
       // for some reason, using bash won't print
-      runCmd("cmd").sync {
+      runCmd("bash").sync {
         withInputs("python --version", "java --version", "gradle --version", "exit")
         withLogger(log.underlyingLogger, stdErrLevel = Level.WARN)
       }
     }
     should("interact without easy syntax") {
-      runCmd("cmd").sync {
+      runCmd("bash").sync {
         onStdIn { this writeLine "python --version" writeLine "java --version" writeLine "gradle --version" writeLine "exit" }
         onStdOutEachLine { log.info { it } }
         onStdErrEachLine { log.warn { it } }
@@ -52,11 +65,13 @@ class ProcessTest : ShouldSpec({
     should("successfully init a gradle project") {
       // for some reason, can't use gradle but gradle.bat
       // gradle init will not make interactive process
-      runCmd("gradle.bat", "init") {
+      runCmd("gradle", "init") {
         directory = Files.createTempDirectory(Path.of("."), "temp-gradle-").also { it.toFile().deleteOnExit() }
       }.sync {
-        withInputs("2", "4", "2", "2",
-        "auto-gen-project", "")
+        withInputs(
+          "2", "4", "2", "2",
+          "auto-gen-project", ""
+        )
         withLogger(log.underlyingLogger, stdErrLevel = Level.WARN)
       }
     }
