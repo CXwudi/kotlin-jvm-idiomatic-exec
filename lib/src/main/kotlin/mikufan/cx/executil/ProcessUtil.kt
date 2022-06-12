@@ -19,6 +19,7 @@ inline fun Process.sync(
   syncer.setupHandler()
   executor.shutdown()
   waitFor(timeout, unit)
+  executor.awaitTermination(timeout, unit)
   return this
 }
 

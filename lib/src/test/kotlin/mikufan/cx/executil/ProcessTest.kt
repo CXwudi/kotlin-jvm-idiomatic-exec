@@ -13,8 +13,7 @@ import java.nio.file.Path
 class ProcessTest : ShouldSpec({
 
   context("run youtube-dl commands") {
-    xshould("sync to logger") {
-      // yt-dlp seems to detect which stream is opened and uses it.
+    should("sync to logger") {
       // https://www.nicovideo.jp/watch/sm40348768
       // https://www.youtube.com/watch?v=IpKDXFGoLnE
       runCmd(
@@ -29,7 +28,7 @@ class ProcessTest : ShouldSpec({
 //        redirectErrorStream()
       }.sync {
         onStdOutEachLine { log.info { it } }
-//        onStdErrEachLine { log.warn { it } }
+        onStdErrEachLine { log.warn { it } }
       }
     }
   }
