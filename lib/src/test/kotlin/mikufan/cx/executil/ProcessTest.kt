@@ -38,6 +38,11 @@ class ProcessTest : ShouldSpec({
       runCmd("java", "--version").sync { withLogger(log.underlyingLogger) }
     }
 
+    should("sync to logger 2") {
+      // for some reason, can't use gradle but gradle.bat
+      runCmd("gradle.bat", "--version").sync { withLogger(log.underlyingLogger) }
+    }
+
     xshould("sync by manual functions") {
       runCmd("python", "--version").sync {
         onStdOutEachLine { log.info { it } }
@@ -55,7 +60,8 @@ class ProcessTest : ShouldSpec({
       }
     }
     should("interact without easy syntax") {
-      runCmd("bash").sync {
+      // in wsl2, bash will be wsl's bash
+      runCmd("cmd").sync {
         onStdIn { this writeLine "python --version" writeLine "java --version" writeLine "gradle --version" writeLine "exit" }
         onStdOutEachLine { log.info { it } }
         onStdErrEachLine { log.warn { it } }
@@ -64,7 +70,7 @@ class ProcessTest : ShouldSpec({
     should("successfully init a gradle project") {
       // for some reason, can't use gradle but gradle.bat
       // gradle init will not make interactive process
-      runCmd("gradle", "init") {
+      runCmd("gradle.bat", "init") {
         directory = Files.createTempDirectory(Path.of("."), "temp-gradle-").also { it.toFile().deleteOnExit() }
       }.sync {
         withInputs(
@@ -72,6 +78,16 @@ class ProcessTest : ShouldSpec({
           "auto-gen-project", ""
         )
         withLogger(log.underlyingLogger, stdErrLevel = Level.WARN)
+      }
+    }
+  }
+
+  context("run with conditional processing symbols") {
+    should("run two commands one by one") {
+      // it shows that java can't be run two commands at once
+      runCmd("java", "--version", "&&", "gradle.bat", "--version").sync {
+        onStdOutEachLine { log.info { it } }
+        onStdErrEachLine { log.warn { it } }
       }
     }
   }
