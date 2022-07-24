@@ -4,39 +4,61 @@ import java.util.concurrent.*
 
 /**
  * Wait and sync on a running process, using a temporary [ThreadPoolExecutor]
+ * @receiver Process the running process to wait on
+ * @param timeout Long the timeout
+ * @param unit TimeUnit the timeout unit
+ * @param setupHandler [@kotlin.ExtensionFunctionType] Function1<ProcessSyncer, Unit> the setup handler of the [ProcessSyncer]
+ * @return Process this process
  */
-inline fun Process.sync(
+fun Process.sync(
   timeout: Long = 10,
   unit: TimeUnit = TimeUnit.MINUTES,
-  setupHandler: ProcessSyncer.() -> Unit = { silently() }
+  setupHandler: ProcessSyncer.() -> Unit = { }
 ): Process {
   val executor: ExecutorService = ThreadPoolExecutor(
-    3, 3,
-    timeout, unit,
-    LinkedBlockingQueue(3), Executors.defaultThreadFactory()
+    3,
+    3,
+    1,
+    TimeUnit.MINUTES,
+    LinkedBlockingQueue(3),
+    Executors.defaultThreadFactory()
   )
   val syncer = ProcessSyncer(executor, this)
+  syncer.silently()
   syncer.setupHandler()
+  syncer.startSync()
   executor.shutdown()
   waitFor(timeout, unit)
-  // waiting for threads, but should not be waiting too long as it ends when the process ends
-  executor.awaitTermination(timeout / 10, unit)
+  // waiting for syncer threads, but should not be waiting too long as syncer threads should end shortly after the process ends
+  syncer.waitForSync(1, TimeUnit.MINUTES)
+  // finally, wait for termination, shouldn't be too long either
+  executor.awaitTermination(1, TimeUnit.MINUTES)
   return this
 }
 
 /**
  * Wait and sync on a running process, using an existing [ThreadPoolExecutor]
+ * @receiver Process the running process to wait on
+ * @param timeout Long the timeout
+ * @param unit TimeUnit the timeout unit
+ * @param executor ExecutorService the executor that user provides to use
+ * @param setupHandler [@kotlin.ExtensionFunctionType] Function1<ProcessSyncer, Unit> the setup handler of the [ProcessSyncer]
+ * @return Process this process
  */
-inline fun Process.sync(
+fun Process.sync(
   timeout: Long = 10,
   unit: TimeUnit = TimeUnit.MINUTES,
   executor: ExecutorService,
-  setupHandler: ProcessSyncer.() -> Unit = { silently() }
+  setupHandler: ProcessSyncer.() -> Unit = { }
 ): Process {
   val syncer = ProcessSyncer(executor, this)
+  syncer.silently()
   syncer.setupHandler()
+  syncer.startSync()
   waitFor(timeout, unit)
-  // do not await termination on external thread pools. users should do it themselves
+  // waiting for syncer threads, but should not be waiting too long as syncer threads should end shortly after the process ends
+  syncer.waitForSync(1, TimeUnit.MINUTES)
+  // do not await termination on external thread pools. users should shut down the executor themselves.
   return this
 }
 
@@ -44,28 +66,46 @@ inline fun Process.sync(
 /**
  * Asynchronously sync on a running process, using a temporary [ThreadPoolExecutor]
  */
-inline fun Process.async(
-  setupHandler: ProcessSyncer.() -> Unit = { silently() }
+fun Process.async(
+  setupHandler: ProcessSyncer.() -> Unit = { }
 ): CompletableFuture<Process> {
   val executor: ExecutorService = ThreadPoolExecutor(
-    3, 3,
-    1, TimeUnit.MINUTES,
-    LinkedBlockingQueue(3), Executors.defaultThreadFactory()
+    3,
+    3,
+    1,
+    TimeUnit.MINUTES,
+    LinkedBlockingQueue(3),
+    Executors.defaultThreadFactory()
   )
   val syncer = ProcessSyncer(executor, this)
+  syncer.silently()
   syncer.setupHandler()
-  executor.shutdown()
-  return onExit()
+  syncer.startSync()
+  return onExit().completeAsync({
+    executor.shutdown()
+    // waiting for syncer threads, but should not be waiting too long as syncer threads should end shortly after the process ends
+    syncer.waitForSync(1, TimeUnit.MINUTES)
+    // finally, wait for termination, shouldn't be too long either
+    executor.awaitTermination(1, TimeUnit.MINUTES)
+    this
+  }, executor)
 }
 
 /**
  * Asynchronously sync on a running process, using an existing [ThreadPoolExecutor]
  */
-inline fun Process.async(
+fun Process.async(
   executor: ExecutorService,
-  setupHandler: ProcessSyncer.() -> Unit = { silently() }
+  setupHandler: ProcessSyncer.() -> Unit = { }
 ): CompletableFuture<Process> {
   val syncer = ProcessSyncer(executor, this)
+  syncer.silently()
   syncer.setupHandler()
-  return onExit()
+  syncer.startSync()
+  return onExit().completeAsync({
+    // waiting for syncer threads, but should not be waiting too long as syncer threads should end shortly after the process ends
+    syncer.waitForSync(1, TimeUnit.MINUTES)
+    // do not await termination on external thread pools. users should shut down the executor themselves.
+    this
+  }, executor)
 }

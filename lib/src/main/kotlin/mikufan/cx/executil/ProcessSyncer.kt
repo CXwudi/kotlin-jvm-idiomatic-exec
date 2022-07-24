@@ -1,4 +1,5 @@
 @file:Suppress("NOTHING_TO_INLINE")
+
 package mikufan.cx.executil
 
 import org.slf4j.Logger
@@ -7,27 +8,40 @@ import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.nio.charset.Charset
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 
 /**
+ * The syncer class for reading stdout, stderr and writing to stdin, all 3 operation in parallel, for a running process.
+ *
+ * It will be used to start the syncing threads once the process is started, and wait for syncing thread to finish after the process is finished.
+ *
  * @date 2021-07-17
  * @author CX无敌
  */
 class ProcessSyncer(
-  val executor: ExecutorService,
-  val process: Process
+  // all fields are private to prevent from abuse of executor from users
+  private val executor: ExecutorService,
+  private val process: Process
 ) {
+
+  // remember the three handler that user provided
+  private var stdOutHandler: Pair<Charset, BufferedReader.() -> Unit>? = null
+  private var stdErrHandler: Pair<Charset, BufferedReader.() -> Unit>? = null
+  private var stdInHandler: Pair<Charset, BufferedWriter.() -> Unit>? = null
+
+  // remember the three future that will be used to wait for
+  private var stdOutFuture: Future<*>? = null
+  private var stdErrFuture: Future<*>? = null
+  private var stdInFuture: Future<*>? = null
 
   /**
    * Read the process's std-out with a [handler] and a specific [Charset]
    * @param charset Charset the char set that the std-out is intended to be read, default is [Charsets.UTF_8]
    * @param handler Function1<BufferedReader, Unit> code about how to handle the std-out
    */
-  inline fun onStdOut(charset: Charset = Charsets.UTF_8, crossinline handler: BufferedReader.() -> Unit) {
-    process.inputStream?.let {
-      executor.execute {
-        it.bufferedReader(charset).use { it.apply(handler) }
-      }
-    }
+  fun onStdOut(charset: Charset = Charsets.UTF_8, handler: BufferedReader.() -> Unit) {
+    stdOutHandler = Pair(charset, handler)
   }
 
   /**
@@ -35,12 +49,8 @@ class ProcessSyncer(
    * @param charset Charset the char set that the std-err is intended to be read, default is [Charsets.UTF_8]
    * @param handler Function1<BufferedReader, Unit> code about how to handle the std-err
    */
-  inline fun onStdErr(charset: Charset = Charsets.UTF_8, crossinline handler: BufferedReader.() -> Unit) {
-    process.errorStream?.let {
-      executor.execute {
-        it.bufferedReader(charset).use { it.apply(handler) }
-      }
-    }
+  fun onStdErr(charset: Charset = Charsets.UTF_8, handler: BufferedReader.() -> Unit) {
+    stdErrHandler = Pair(charset, handler)
   }
 
   /**
@@ -48,12 +58,8 @@ class ProcessSyncer(
    * @param charset Charset the char set that the std-in is intended to be used, default is [Charsets.UTF_8]
    * @param handler Function1<BufferedWriter, Unit> code about how to handle the std-in
    */
-  inline fun onStdIn(charset: Charset = Charsets.UTF_8, crossinline handler: BufferedWriter.() -> Unit) {
-    process.outputStream?.let {
-      executor.execute {
-        it.bufferedWriter(charset).use { it.apply(handler) }
-      }
-    }
+  fun onStdIn(charset: Charset = Charsets.UTF_8, handler: BufferedWriter.() -> Unit) {
+    stdInHandler = Pair(charset, handler)
   }
 
   /**
@@ -61,7 +67,7 @@ class ProcessSyncer(
    * @param charset Charset the char set that the std-out is intended to be read, default is [Charsets.UTF_8]
    * @param lineHandler Function1<String, Unit> code about how to handle each line in std-out
    */
-  inline fun onStdOutEachLine(charset: Charset = Charsets.UTF_8, noinline lineHandler: (String) -> Unit) {
+  inline fun onStdOutEachLine(charset: Charset = Charsets.UTF_8, crossinline lineHandler: (String) -> Unit) {
     onStdOut(charset) { lineSequence().forEach(lineHandler) }
   }
 
@@ -70,7 +76,7 @@ class ProcessSyncer(
    * @param charset Charset the char set that the std-err is intended to be read, default is [Charsets.UTF_8]
    * @param lineHandler Function1<String, Unit> code about how to handle each line in std-err
    */
-  inline fun onStdErrEachLine(charset: Charset = Charsets.UTF_8, noinline lineHandler: (String) -> Unit) {
+  inline fun onStdErrEachLine(charset: Charset = Charsets.UTF_8, crossinline lineHandler: (String) -> Unit) {
     onStdErr(charset) { lineSequence().forEach(lineHandler) }
   }
 
@@ -82,8 +88,9 @@ class ProcessSyncer(
    * but don't want the process hangs due to not flushing streams
    */
   inline fun silently() {
-    onStdOut { }
-    onStdErr { }
+    // using on*EachLine because it is actually reading the InputStream. onStdOut() with nothing will do nothing to InputStream as well
+    onStdOutEachLine { }
+    onStdErrEachLine { }
   }
 
   /**
@@ -127,6 +134,44 @@ class ProcessSyncer(
     Level.INFO -> { str, logger -> logger.info(str) }
     Level.WARN -> { str, logger -> logger.warn(str) }
     Level.ERROR -> { str, logger -> logger.error(str) }
+  }
+
+  /**
+   * start the syncing threads
+   */
+  internal fun startSync() {
+    stdOutFuture = stdOutHandler?.let { pair ->
+      process.inputStream?.let {
+        executor.submit {
+          it.bufferedReader(pair.first).use { it.apply(pair.second) }
+        }
+      }
+    }
+    stdErrFuture = stdErrHandler?.let { pair ->
+      process.errorStream?.let {
+        executor.submit {
+          it.bufferedReader(pair.first).use { it.apply(pair.second) }
+        }
+      }
+    }
+    stdInFuture = stdInHandler?.let { pair ->
+      process.outputStream?.let {
+        executor.submit {
+          it.bufferedWriter(pair.first).use { it.apply(pair.second) }
+        }
+      }
+    }
+  }
+
+  /**
+   * wait for the syncing threads to finish
+   * @param time Long the time to wait for the syncing threads to finish
+   * @param timeUnit TimeUnit the time unit of the [time]
+   */
+  internal fun waitForSync(time: Long, timeUnit: TimeUnit) {
+    stdOutFuture?.get(time, timeUnit)
+    stdErrFuture?.get(time, timeUnit)
+    stdInFuture?.get(time, timeUnit)
   }
 }
 

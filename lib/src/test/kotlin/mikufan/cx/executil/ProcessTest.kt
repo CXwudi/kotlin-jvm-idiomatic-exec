@@ -43,8 +43,8 @@ class ProcessTest : ShouldSpec({
       runCmd("gradle.bat", "--version").sync { withLogger(log.underlyingLogger) }
     }
 
-    xshould("sync by manual functions") {
-      runCmd("python", "--version").sync {
+    should("sync by manual functions") {
+      runCmd("java", "--version").sync {
         onStdOutEachLine { log.info { it } }
         onStdErrEachLine { log.warn { it } }
       }
@@ -74,8 +74,12 @@ class ProcessTest : ShouldSpec({
         directory = Files.createTempDirectory(Path.of("."), "temp-gradle-").also { it.toFile().deleteOnExit() }
       }.sync {
         withInputs(
-          "2", "4", "2", "2",
-          "auto-gen-project", ""
+          "2",
+            "4",
+            "2",
+            "2",
+          "auto-gen-project",
+            ""
         )
         withLogger(log.underlyingLogger, stdErrLevel = Level.WARN)
       }
